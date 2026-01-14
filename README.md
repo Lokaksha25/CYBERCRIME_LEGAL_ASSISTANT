@@ -13,19 +13,19 @@
 
 ## 📋 Table of Contents
 
-- [Overview](#overview)
-- [Features](#features)
-- [System Architecture](#system-architecture)
-- [Tech Stack](#tech-stack)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Installation](#installation)
-  - [Configuration](#configuration)
-- [Usage](#usage)
-- [Project Structure](#project-structure)
-- [API Reference](#api-reference)
-- [Dataset](#dataset)
-- [Acknowledgments](#acknowledgments)
+- Overview
+- Features
+- System Architecture
+- Tech Stack
+- Getting Started
+  - Prerequisites
+  - Installation
+  - Configuration
+- Usage
+- Project Structure
+- API Reference
+- Dataset
+- Acknowledgments
 
 ---
 
@@ -158,8 +158,7 @@ cd legalchatbot
 # Create virtual environment
 python -m venv .venv
 
-# Activate virtual environment
-# On Windows:
+# Activate virtual environment on Windows:
 .venv\Scripts\activate
 # On macOS/Linux:
 source .venv/bin/activate
