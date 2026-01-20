@@ -121,3 +121,197 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #6366f1; /* Indigo Hover */
 }
+
+/* ================================
+   Legal Assistant Response Styles
+   ================================ */
+
+/* Tables - Legal Analysis Section */
+.legal-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1rem 0;
+  font-size: 0.875rem;
+  border-radius: 0.5rem;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+}
+
+.dark .legal-content table {
+  border-color: #334155;
+}
+
+.legal-content th {
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  color: white;
+  font-weight: 600;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.legal-content td {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+
+.dark .legal-content td {
+  border-color: #334155;
+}
+
+.legal-content tr:nth-child(even) td {
+  background-color: #f8fafc;
+}
+
+.dark .legal-content tr:nth-child(even) td {
+  background-color: #1e293b;
+}
+
+.legal-content tr:hover td {
+  background-color: #eef2ff;
+}
+
+.dark .legal-content tr:hover td {
+  background-color: #312e81;
+}
+
+/* Collapsible Details - Legal References */
+.legal-content details {
+  margin: 1.25rem 0;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.dark .legal-content details {
+  border-color: #334155;
+  background-color: #0f172a;
+}
+
+.legal-content details[open] {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+}
+
+.legal-content summary {
+  padding: 0.875rem 1.25rem;
+  background: linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%);
+  cursor: pointer;
+  font-weight: 600;
+  color: #4f46e5;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: background 0.2s ease;
+  list-style: none;
+}
+
+.legal-content summary::-webkit-details-marker {
+  display: none;
+}
+
+.legal-content summary::before {
+  content: "▶";
+  font-size: 0.65rem;
+  transition: transform 0.2s ease;
+}
+
+.legal-content details[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.dark .legal-content summary {
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: #818cf8;
+}
+
+.legal-content summary:hover {
+  background: linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%);
+}
+
+.dark .legal-content summary:hover {
+  background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+}
+
+.legal-content details > *:not(summary) {
+  padding: 1rem 1.25rem;
+  background-color: #ffffff;
+}
+
+.dark .legal-content details > *:not(summary) {
+  background-color: #020617;
+}
+
+/* Section Headings */
+.legal-content h2 {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.dark .legal-content h2 {
+  color: #f1f5f9;
+  border-color: #334155;
+}
+
+/* Numbered Lists - Recommended Next Steps */
+.legal-content ol {
+  counter-reset: step-counter;
+  list-style: none;
+  padding-left: 0;
+  margin: 1rem 0;
+}
+
+.legal-content ol li {
+  counter-increment: step-counter;
+  position: relative;
+  padding-left: 2.5rem;
+  margin-bottom: 0.75rem;
+  line-height: 1.6;
+}
+
+.legal-content ol li::before {
+  content: counter(step-counter);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1.75rem;
+  height: 1.75rem;
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+  color: white;
+  font-weight: 700;
+  font-size: 0.8rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Bulleted Lists - Evidence Checklist */
+.legal-content ul {
+  list-style: none;
+  padding-left: 0;
+  margin: 1rem 0;
+}
+
+.legal-content ul li {
+  position: relative;
+  padding-left: 1.75rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.6;
+}
+
+.legal-content ul li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #10b981;
+  font-weight: 700;
+}

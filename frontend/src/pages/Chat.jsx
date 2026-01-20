@@ -13,10 +13,12 @@ import {
   ChevronRight,
   Trash2,
   Eraser,
-  Home
+  Home,
+  FileText
 } from "lucide-react";
 import { api } from "../api/Client";
 import Message from "../components/Message";
+import VoiceInput from "../components/VoiceInput";
 
 
 
@@ -26,7 +28,7 @@ export default function Chat() {
   const [loading, setLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
+
   // REAL-TIME PERSISTENT HISTORY
   const [chatHistory, setChatHistory] = useState(() => {
     const saved = localStorage.getItem("legal_ai_history");
@@ -89,7 +91,7 @@ export default function Chat() {
 
     const userMsg = { role: "user", text: textToSend };
     const newMessages = [...messages, userMsg];
-    
+
     setMessages(newMessages);
     setInput("");
     setLoading(true);
@@ -119,7 +121,7 @@ export default function Chat() {
             messages: finalMessages,
             date: new Date().toLocaleDateString()
           }, ...prev];
-        } 
+        }
         // Update the current active session in history
         const updated = [...prev];
         if (updated.length > 0) {
@@ -138,9 +140,39 @@ export default function Chat() {
     }
   };
 
+  // Handle voice query results
+  const handleVoiceResponse = (queryText, responseText, sources) => {
+    const userMsg = { role: "user", text: `🎙️ ${queryText}` };
+    const botMsg = {
+      role: "bot",
+      text: responseText || "No response received.",
+      sources: sources || [],
+    };
+
+    const newMessages = [...messages, userMsg, botMsg];
+    setMessages(newMessages);
+
+    // Update history
+    setChatHistory(prev => {
+      if (messages.length === 0) {
+        return [{
+          id: Date.now(),
+          title: `🎙️ ${queryText.substring(0, 30)}...`,
+          messages: newMessages,
+          date: new Date().toLocaleDateString()
+        }, ...prev];
+      }
+      const updated = [...prev];
+      if (updated.length > 0) {
+        updated[0] = { ...updated[0], messages: newMessages };
+      }
+      return updated;
+    });
+  };
+
   return (
     <div className="flex h-screen bg-slate-50 dark:bg-[#020617] text-slate-900 dark:text-slate-100 transition-colors duration-500">
-      
+
       {/* SIDEBAR */}
       <aside className={`
         ${isSidebarOpen ? "w-72" : "w-0"} 
@@ -149,13 +181,20 @@ export default function Chat() {
         bg-white dark:bg-[#0f172a] flex flex-col shadow-xl
       `}>
         <div className="p-4 space-y-2">
-          <button 
+          <button
             onClick={handleNewChat}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-medium transition-all duration-200 shadow-lg shadow-indigo-500/20 bg-indigo-600 text-white hover:bg-indigo-500 dark:bg-indigo-600/90 dark:hover:bg-indigo-500 active:scale-95"
           >
             <Plus size={18} />
             <span>New Consultation</span>
           </button>
+          <Link
+            to="/rti"
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl font-medium transition-all duration-200 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700"
+          >
+            <FileText size={18} />
+            <span>RTI Form Drafter</span>
+          </Link>
         </div>
 
         <div className="flex-1 overflow-y-auto px-3 space-y-1 custom-scrollbar">
@@ -164,7 +203,7 @@ export default function Chat() {
               Recent Inquiries
             </span>
             {chatHistory.length > 0 && (
-              <button 
+              <button
                 onClick={clearAllHistory}
                 className="p-1.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 rounded-lg transition-colors"
                 title="Clear all history"
@@ -173,14 +212,14 @@ export default function Chat() {
               </button>
             )}
           </div>
-          
+
           {chatHistory.length === 0 ? (
             <div className="px-4 py-8 text-center border border-dashed border-slate-200 dark:border-slate-800 rounded-xl mx-2">
               <p className="text-xs text-slate-400 italic font-medium leading-relaxed">Your consultation history will appear here</p>
             </div>
           ) : (
             chatHistory.map((item) => (
-              <div 
+              <div
                 key={item.id}
                 onClick={() => loadChatFromHistory(item)}
                 className="group w-full flex items-center justify-between gap-3 px-3 py-2.5 text-sm rounded-xl cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/50 transition relative overflow-hidden active:bg-slate-200 dark:active:bg-slate-800"
@@ -189,7 +228,7 @@ export default function Chat() {
                   <MessageSquare size={16} className="text-slate-400 group-hover:text-indigo-500 transition-colors shrink-0" />
                   <span className="truncate text-slate-600 dark:text-slate-300 font-medium">{item.title}</span>
                 </div>
-                <button 
+                <button
                   onClick={(e) => deleteHistoryItem(e, item.id)}
                   className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 dark:hover:bg-red-900/20 text-slate-400 hover:text-red-500 rounded-md transition-all"
                 >
@@ -201,7 +240,7 @@ export default function Chat() {
         </div>
 
         <div className="p-4 border-t border-slate-200 dark:border-slate-800/60 bg-slate-50/30 dark:bg-slate-900/20">
-           <div className="flex items-center gap-3 p-2 rounded-xl">
+          <div className="flex items-center gap-3 p-2 rounded-xl">
             <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white text-xs font-bold shadow-lg">
               JD
             </div>
@@ -215,27 +254,27 @@ export default function Chat() {
 
       {/* MAIN CONTENT */}
       <main className="flex-1 flex flex-col relative min-w-0">
-        
+
         {/* TOP NAV */}
         <header className="h-16 border-b border-slate-200 dark:border-slate-800/60 flex items-center justify-between px-6 bg-white/70 dark:bg-[#020617]/70 backdrop-blur-xl sticky top-0 z-30">
           <div className="flex items-center gap-4">
             <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors">
               <Menu size={20} className="text-slate-500" />
             </button>
-            
+
             {/* LOGO / BACK TO LANDING */}
             <Link
-                to="/"
-                className="flex items-center gap-2 group active:scale-95 transition-transform"
-                title="Return to Home"
-              >
-                <div className="p-1.5 bg-indigo-600 rounded-lg shadow-md group-hover:bg-indigo-500 transition-colors">
-                  <Gavel size={18} className="text-white" />
-                </div>
-                <h1 className="font-bold tracking-tight text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                  LegalCore AI
-                </h1>
-              </Link>
+              to="/"
+              className="flex items-center gap-2 group active:scale-95 transition-transform"
+              title="Return to Home"
+            >
+              <div className="p-1.5 bg-indigo-600 rounded-lg shadow-md group-hover:bg-indigo-500 transition-colors">
+                <Gavel size={18} className="text-white" />
+              </div>
+              <h1 className="font-bold tracking-tight text-slate-800 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                LegalCore AI
+              </h1>
+            </Link>
 
           </div>
 
@@ -254,7 +293,7 @@ export default function Chat() {
               <div className="mt-8 space-y-12">
                 <div className="space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
                   <h2 className="text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white leading-tight">
-                    Where should we <br/>
+                    Where should we <br />
                     <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-500 to-purple-400">start today?</span>
                   </h2>
                   <p className="text-slate-500 dark:text-slate-400 text-xl max-w-xl font-medium">
@@ -296,6 +335,12 @@ export default function Chat() {
         {/* INPUT AREA */}
         <div className="p-8 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent dark:from-[#020617] dark:via-[#020617] dark:to-transparent">
           <div className="max-w-4xl mx-auto">
+            {/* Voice Input Section */}
+            <div className="flex items-center justify-between gap-4 mb-4">
+              <VoiceInput onQueryReceived={handleVoiceResponse} />
+              <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">or type below</span>
+            </div>
+
             <div className="relative group flex items-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl focus-within:ring-2 ring-indigo-500/20 transition-all p-2">
               <input
                 className="flex-1 bg-transparent outline-none px-4 py-3 text-base placeholder:text-slate-400 dark:placeholder:text-slate-600"

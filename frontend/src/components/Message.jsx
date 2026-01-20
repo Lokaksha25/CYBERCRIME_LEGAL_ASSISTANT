@@ -1,5 +1,7 @@
 import { useState } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import SourceCard from "./SourceCard";
 import { User, ChevronDown, ChevronUp, Scale } from "lucide-react";
 
@@ -9,12 +11,12 @@ export default function Message({ message }) {
 
   return (
     <div className={`flex w-full ${isUser ? "justify-end" : "justify-start"} group animate-in fade-in slide-in-from-bottom-2 duration-300`}>
-      <div className={`flex gap-3 max-w-[85%] md:max-w-[75%] ${isUser ? "flex-row-reverse" : "flex-row"}`}>
-        
+      <div className={`flex gap-3 ${isUser ? "max-w-[85%] md:max-w-[75%]" : "max-w-[95%] md:max-w-[90%]"} ${isUser ? "flex-row-reverse" : "flex-row"}`}>
+
         {/* Adaptive Avatar Icon */}
         <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 border mt-1 shadow-sm transition-colors
-          ${isUser 
-            ? "bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400" 
+          ${isUser
+            ? "bg-zinc-100 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400"
             : "bg-blue-600/10 border-blue-500/30 text-blue-600 dark:text-blue-400"}`}>
           {isUser ? <User size={14} /> : <Scale size={14} />}
         </div>
@@ -27,18 +29,20 @@ export default function Message({ message }) {
 
           {/* Adaptive Message Bubble */}
           <div
-            className={`px-4 py-3 rounded-2xl shadow-sm border transition-all duration-300 ${
-              isUser 
-                ? "bg-blue-600 border-blue-500 text-white rounded-tr-none shadow-blue-500/10" 
-                : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-tl-none"
-            }`}
+            className={`px-4 py-3 rounded-2xl shadow-sm border transition-all duration-300 ${isUser
+              ? "bg-blue-600 border-blue-500 text-white rounded-tr-none shadow-blue-500/10"
+              : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 rounded-tl-none"
+              }`}
           >
             {/* Prose class handles typography scaling; prose-invert is triggered only in dark mode */}
-            <div className={`prose prose-sm max-w-none leading-relaxed transition-colors
-              ${isUser 
-                ? "prose-invert text-white" 
+            <div className={`prose prose-sm max-w-none leading-relaxed transition-colors legal-content
+              ${isUser
+                ? "prose-invert text-white"
                 : "prose-zinc dark:prose-invert text-zinc-800 dark:text-zinc-200"}`}>
-              <ReactMarkdown>
+              <ReactMarkdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={[rehypeRaw]}
+              >
                 {message.text || ""}
               </ReactMarkdown>
             </div>

@@ -49,18 +49,68 @@ CyberCrime Legal Assistant is a **Retrieval-Augmented Generation (RAG)** system 
 ### Core Capabilities
 
 - 🔍 **Semantic Search**: ChromaDB-powered vector search for finding relevant cases
-- 🧠 **LLM Reasoning**: Groq (LLaMA 3.1) for natural language generation
+- 🧠 **LLM Reasoning**: Groq (LLaMA 3.3) for natural language generation
 - 📚 **Case Citations**: Transparent source attribution with case references
 - ⚡ **Fast Inference**: Groq's infrastructure ensures sub-second response times
 - 🎨 **Modern UI**: React-based chat interface with dark mode support
+- 🎙️ **Multilingual Voice Input**: Speak in English, Hindi, Kannada, or Tamil
+
+### New Features
+
+#### 📄 RTI Application Drafter
+- Generate formal RTI (Right to Information) applications in PDF format
+- Form 'A' compliant with RTI Rules, 2012
+- Preview before download with embedded PDF viewer
+- Access via `/rti` route or sidebar link
+
+#### 🚨 Emergency Helpline (1930)
+- Prominently displayed for **UPI fraud and financial loss cases only**
+- "Golden hour" guidance to freeze fraudulent transactions
+- Direct link to [cybercrime.gov.in](https://cybercrime.gov.in/) portal
+
+#### ⚖️ BNS (Bharatiya Nyaya Sanhita) Formatting
+- Automatic conversion from old IPC sections to new BNS format
+- Display: **"BNS Section 319 (formerly IPC Section 419)"**
+- Mapping covers 7 common cybercrime sections
+
+#### 📱 Social Media Grievance Officers
+- Contact details for 16 major platforms
+- WhatsApp, Facebook, Instagram, X (Twitter), YouTube, Snapchat, LinkedIn, Telegram, Reddit, Discord, Tinder, Bumble, and more
+- AI asks which platform if not mentioned, then provides specific officer contact
+
+#### 🎙️ Multilingual Voice Support
+- **Voice-to-RAG Engine:** Speak directly to the chatbot in your native language
+- **Supported Languages:**
+  - 🇬🇧 English
+  - 🇮🇳 Hindi (हिन्दी)
+  - 🇮🇳 Kannada (ಕನ್ನಡ)
+  - 🇮🇳 Tamil (தமிழ்)
+- **Real-time Processing:**
+  1. Records audio in web browser
+  2. Transcribes speech-to-text via backend
+  3. Translates to English for legal processing
+  4. Generates legal response
+  5. Translates response back to native language
+  6. Plays back audio response automatically
+
+### Structured Response Format
+
+Every response includes:
+1. **🚨 URGENT ACTION** (for financial fraud only)
+2. **Case Overview** - Summary of the situation
+3. **Legal Analysis** - Table with relevant BNS/IT Act sections
+4. **Recommended Next Steps** - Actionable guidance with portal links
+5. **Required Evidence** - What to preserve for complaints
+6. **Authorities & Jurisdiction** - Where to report
 
 ### User Experience
 
 - 💬 Real-time chat interface
-- 📝 Context-aware responses
+- 📝 Context-aware responses with case citations
 - 🌓 Dark/Light mode toggle
 - 📱 Responsive design
-- 💾 Chat history persistence
+- 💾 Chat history persistence (localStorage)
+
 
 ---
 
@@ -203,13 +253,20 @@ This will:
 ### Development Mode
 
 **Terminal 1 - Backend:**
-```bash
-# Activate virtual environment
-source .venv/bin/activate  # or .venv\Scripts\activate on Windows
-
-# Run backend (from root)
+```powershell
+# Windows PowerShell
 cd backend
-python main.py
+& "../.venv/Scripts/activate.ps1"
+$env:PYTHONPATH = "C:\path\to\cybercrime-rag-system\backend"
+python -m uvicorn app.main:app --host 127.0.0.1 --port 5000 --reload
+```
+
+```bash
+# macOS/Linux
+cd backend
+source ../.venv/bin/activate
+export PYTHONPATH=$(pwd)
+uvicorn app.main:app --host 127.0.0.1 --port 5000 --reload
 ```
 
 **Terminal 2 - Frontend:**
@@ -218,19 +275,15 @@ cd frontend
 npm run dev
 ```
 
-Visit `http://localhost:5173` in your browser.
+### Access Points
 
-### Production Build
-
-```bash
-# Frontend
-cd frontend
-npm run build
-
-# Serve with backend
-cd ../backend
-python main.py --production
-```
+| Route | Description |
+|-------|-------------|
+| `http://localhost:5173` | Landing Page |
+| `http://localhost:5173/chat` | Legal AI Chatbot |
+| `http://localhost:5173/rti` | RTI Application Drafter |
+| `http://localhost:5000/` | Backend Health Check |
+| `http://localhost:5000/docs` | API Documentation (Swagger) |
 
 ### CLI Testing
 
@@ -273,9 +326,13 @@ LEGALCHATBOT/
 │   │   ├── api/
 │   │   │   └── Client.js            # API client
 │   │   ├── components/
-│   │   │   └── Message.jsx          # Chat message component
+│   │   │   ├── Message.jsx          # Chat message component
+│   │   │   ├── VoiceInput.jsx       # Voice recording component
+│   │   │   └── ...                  # Other UI components
 │   │   ├── pages/
-│   │   │   └── Chat.jsx             # Main chat page
+│   │   │   ├── Chat.jsx             # Main chat page
+│   │   │   ├── landing.jsx          # Landing page
+│   │   │   └── RTIForm.jsx          # RTI Application Drafter
 │   │   ├── App.jsx
 │   │   └── main.jsx
 │   ├── public/
