@@ -416,6 +416,31 @@ The system uses a curated dataset of cybercrime cases stored in `data/cases.json
 
 > **Important**: The dataset is compiled from publicly available cybercrime case summaries for educational and research purposes only.
 
+---
+
+## 📈 Vector Embedding Visualizations
+
+The RAG system uses **SentenceTransformers** to generate vector embeddings for each legal case, enabling semantic similarity search. Below are 3D visualizations of how the embeddings cluster by crime category using t-SNE dimensionality reduction.
+
+### 3D Legal Case Clusters
+
+![3D Vector Embedding Clusters](assets/vector_embeddings_3d_clusters.png)
+
+*The visualization shows distinct clusters for different cybercrime categories: Account hacking, Cyber bullying, OTP Fraud, Ransomware, Data breach, Financial fraud (UPI/Phishing), Identity theft, Image morphing, and more.*
+
+### Interactive Case Explorer
+
+![Interactive Vector Embedding View](assets/vector_embeddings_interactive.png)
+
+*Hover over any point to see case details including Incident ID, Category, and Description. This demonstrates how semantically similar cases are grouped together in the vector space.*
+
+### Key Insights
+
+- **Clear Separation**: Different crime types form distinct clusters
+- **Semantic Similarity**: Cases with similar legal implications are positioned closer together
+- **Effective Retrieval**: This clustering enables accurate retrieval of relevant precedents for user queries
+
+---
 
 ### Coding Standards
 

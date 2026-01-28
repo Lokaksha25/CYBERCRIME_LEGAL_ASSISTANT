@@ -28,6 +28,7 @@ export default function Chat() {
   const [loading, setLoading] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [language, setLanguage] = useState("english"); // Shared language state
 
   // REAL-TIME PERSISTENT HISTORY
   const [chatHistory, setChatHistory] = useState(() => {
@@ -100,6 +101,7 @@ export default function Chat() {
       const res = await api.post("/ask", {
         question: userMsg.text,
         top_k: 5,
+        language: language,  // Pass selected language for translation
       });
 
       const botMsg = {
@@ -337,7 +339,11 @@ export default function Chat() {
           <div className="max-w-4xl mx-auto">
             {/* Voice Input Section */}
             <div className="flex items-center justify-between gap-4 mb-4">
-              <VoiceInput onQueryReceived={handleVoiceResponse} />
+              <VoiceInput
+                onQueryReceived={handleVoiceResponse}
+                language={language}
+                onLanguageChange={setLanguage}
+              />
               <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">or type below</span>
             </div>
 

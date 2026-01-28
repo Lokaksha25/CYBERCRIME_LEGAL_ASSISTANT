@@ -62,7 +62,7 @@ export default function Landing() {
 
               {/* Documentation → GitHub */}
               <a
-                href="https://github.com/nandannb-is24/cybercrime-rag-system"
+                href="https://github.com/Lokaksha25/CYBERCRIME_LEGAL_ASSISTANT.git"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="
@@ -75,6 +75,30 @@ export default function Landing() {
               >
                 Documentation
               </a>
+            </div>
+
+            {/* Safety Tools Section */}
+            <div className="mt-8 pt-6 border-t border-white/10">
+              <p className="text-xs text-gray-500 uppercase tracking-widest mb-4">Quick Safety Tools</p>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                {/* Track Cyber Cell */}
+                <Link
+                  to="/cyber-cell"
+                  className="group relative w-full sm:w-auto px-8 py-3 bg-red-600/20 hover:bg-red-600/30 text-red-300 hover:text-red-200 font-semibold rounded-xl transition-all border border-red-500/30 overflow-hidden flex items-center justify-center gap-2"
+                >
+                  <span className="text-lg">🚨</span>
+                  <span className="relative z-10">Track Nearest Cyber Cell</span>
+                </Link>
+
+                {/* Find Legal Help */}
+                <Link
+                  to="/legal-help"
+                  className="group relative w-full sm:w-auto px-8 py-3 bg-violet-600/20 hover:bg-violet-600/30 text-violet-300 hover:text-violet-200 font-semibold rounded-xl transition-all border border-violet-500/30 overflow-hidden flex items-center justify-center gap-2"
+                >
+                  <span className="text-lg">⚖️</span>
+                  <span className="relative z-10">Find Legal Help</span>
+                </Link>
+              </div>
             </div>
           </div>
         </ScrollReveal>

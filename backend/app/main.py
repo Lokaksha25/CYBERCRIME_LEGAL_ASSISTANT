@@ -12,7 +12,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PROJECT_ROOT / ".env")
 
 from app.rag.glue import answer_question
-from app.rag.voice_utils import process_voice_query
+from app.rag.voice_utils import process_voice_query, translate_from_english, LANGUAGE_CODES
 
 # ------------------------
 # FastAPI App
@@ -40,6 +40,7 @@ app.add_middleware(
 class AskRequest(BaseModel):
     question: str
     top_k: int = 5
+    language: str = "english"  # Supported: english, hindi, kannada, tamil
 
 
 class Source(BaseModel):
@@ -76,6 +77,13 @@ def ask(payload: AskRequest):
             payload.question,
             payload.top_k
         )
+
+        # Translate response to user's selected language if not English
+        target_lang = payload.language.lower()
+        if target_lang != "english" and target_lang in LANGUAGE_CODES:
+            lang_code = LANGUAGE_CODES[target_lang]["translator"]
+            answer = translate_from_english(answer, lang_code)
+            print(f"🔄 Translated response to {target_lang}")
 
         return {
             "answer": answer,

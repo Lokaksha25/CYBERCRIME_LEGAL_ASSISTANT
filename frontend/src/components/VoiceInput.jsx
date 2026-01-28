@@ -12,8 +12,17 @@ import { Mic, MicOff, Loader2, Volume2, Languages } from "lucide-react";
  * - onQueryReceived: (queryText, responseText, sources) => void
  * - apiBaseUrl: Backend URL (default: "http://127.0.0.1:8000")
  */
-export default function VoiceInput({ onQueryReceived, apiBaseUrl = "http://127.0.0.1:8000" }) {
-  const [language, setLanguage] = useState("english");
+export default function VoiceInput({
+  onQueryReceived,
+  apiBaseUrl = "http://127.0.0.1:5000",
+  language: externalLanguage,
+  onLanguageChange
+}) {
+  // Use external language state if provided, otherwise fallback to local state
+  const [localLanguage, setLocalLanguage] = useState("english");
+  const language = externalLanguage ?? localLanguage;
+  const setLanguage = onLanguageChange ?? setLocalLanguage;
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const audioRef = useRef(null);
@@ -109,8 +118,8 @@ export default function VoiceInput({ onQueryReceived, apiBaseUrl = "http://127.0
         disabled={isProcessing}
         className={`
           p-3.5 rounded-xl transition-all shadow-lg 
-          ${isRecording 
-            ? "bg-red-500 hover:bg-red-600 shadow-red-500/30 animate-pulse" 
+          ${isRecording
+            ? "bg-red-500 hover:bg-red-600 shadow-red-500/30 animate-pulse"
             : "bg-indigo-600 hover:bg-indigo-500 shadow-indigo-500/30"
           }
           text-white disabled:opacity-50 disabled:cursor-not-allowed
