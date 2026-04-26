@@ -177,31 +177,37 @@ def process_voice_query(
     gtts_lang = lang_config["gtts"]
     translator_lang = lang_config["translator"]
     
+    def safe_print(msg):
+        try:
+            print(msg)
+        except UnicodeEncodeError:
+            print(msg.encode('unicode_escape').decode('ascii', 'ignore'))
+
     # Step A: Speech-to-Text (Native language)
     native_query = transcribe_audio(audio_file_path, language=whisper_lang)
-    print(f"📝 Transcribed ({target_language}): {native_query}")
+    safe_print(f"📝 Transcribed ({target_language}): {native_query}")
     
     # Step B: Translate to English (if needed)
     if translator_lang != "en":
         english_query = translate_to_english(native_query, translator_lang)
-        print(f"🔄 Translated to English: {english_query}")
+        safe_print(f"🔄 Translated to English: {english_query}")
     else:
         english_query = native_query
     
     # Step C: RAG Query
     english_response, sources = rag_function(english_query)
-    print(f"🤖 RAG Response: {english_response[:100]}...")
+    safe_print(f"🤖 RAG Response: {english_response[:100]}...")
     
     # Step D: Translate response back to Native (if needed)
     if translator_lang != "en":
         native_response = translate_from_english(english_response, translator_lang)
-        print(f"🔄 Translated to {target_language}: {native_response[:100]}...")
+        safe_print(f"🔄 Translated to {target_language}: {native_response[:100]}...")
     else:
         native_response = english_response
     
     # Step E: Text-to-Speech
     audio_base64 = text_to_speech_base64(native_response, gtts_lang)
-    print(f"🔊 Generated audio ({len(audio_base64)} chars base64)")
+    safe_print(f"🔊 Generated audio ({len(audio_base64)} chars base64)")
     
     return {
         "query_text_native": native_query,

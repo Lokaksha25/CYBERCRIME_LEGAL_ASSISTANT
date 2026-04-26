@@ -78,6 +78,11 @@ CyberCrime Legal Assistant is a **Retrieval-Augmented Generation (RAG)** system 
 - WhatsApp, Facebook, Instagram, X (Twitter), YouTube, Snapchat, LinkedIn, Telegram, Reddit, Discord, Tinder, Bumble, and more
 - AI asks which platform if not mentioned, then provides specific officer contact
 
+#### 🗺️ Interactive Map Locators (MapTiler Integration)
+- Visual search for the nearest **Cyber Crime Police Stations** and **Legal Aid Providers**.
+- Calculate Haversine distance, rendering verified nodes dynamically on an interactive map.
+- Real-world curated datasets (`cyberStations.js` and `lawyerData.js`) covering major Indian metropolitan areas.
+
 #### 🎙️ Multilingual Voice Support
 - **Voice-to-RAG Engine:** Speak directly to the chatbot in your native language
 - **Supported Languages:**
