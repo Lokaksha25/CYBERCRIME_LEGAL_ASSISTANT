@@ -8,7 +8,8 @@ import {
 } from 'lucide-react';
 import Background from '../components/Background';
 import MapTilerMap from '../components/MapTilerMap';
-import { LAWYER_DATA, SPECIALIZATIONS } from '../data/lawyerData';
+import LAWYER_DATA from '../data/lawyerData';
+const SPECIALIZATIONS = ['Cyber Crime', 'Financial Fraud', 'Data Privacy'];
 
 // Default center (India - New Delhi)
 const defaultCenter = { lat: 28.6139, lng: 77.209 };
@@ -98,7 +99,7 @@ export default function LegalHelpLocator() {
         let filteredLawyers = LAWYER_DATA;
         if (specialization) {
             filteredLawyers = LAWYER_DATA.filter(lawyer =>
-                lawyer.specializations.includes(specialization)
+                lawyer.specializations?.includes(specialization)
             );
         }
 
@@ -181,10 +182,10 @@ export default function LegalHelpLocator() {
 
     // ============ MAP MARKERS ============
     const mapMarkers = results.map((lawyer) => ({
-        id: lawyer.id,
+        id: lawyer.id || `lawyer-${lawyer.lat}`,
         lat: lawyer.lat,
         lng: lawyer.lng,
-        name: lawyer.name,
+        name: lawyer.label || lawyer.name,
         address: lawyer.address,
         distance: lawyer.distance,
         color: '#8B5CF6',

@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import Background from '../components/Background';
 import MapTilerMap from '../components/MapTilerMap';
-import { CYBER_STATIONS } from '../data/cyberStations';
+import CYBER_STATIONS from '../data/cyberStations';
 
 // Default center (India - New Delhi)
 const defaultCenter = { lat: 28.6139, lng: 77.209 };
