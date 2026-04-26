@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Phone, Navigation, Shield, Search, AlertTriangle,
     Loader2, X, MessageCircle, PhoneCall, ArrowLeft, Clock,
@@ -8,43 +7,11 @@ import {
     Gavel, Home, Building2
 } from 'lucide-react';
 import Background from '../components/Background';
+import MapTilerMap from '../components/MapTilerMap';
 import { CYBER_STATIONS } from '../data/cyberStations';
-
-// Map container styles
-const containerStyle = {
-    width: '100%',
-    height: '100%',
-    borderRadius: '1rem',
-};
 
 // Default center (India - New Delhi)
 const defaultCenter = { lat: 28.6139, lng: 77.209 };
-
-// Libraries to load
-const libraries = ['places'];
-
-// Search keywords for Cyber Cells
-const SEARCH_KEYWORDS = [
-    'Cyber Crime Police Station',
-    'CEN Police Station',
-    'Cyber Cell',
-    'Commissioner of Police Office',
-    'Police Station'
-];
-
-// Custom map styles for dark theme
-const mapStyles = [
-    { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#1a3646' }] },
-    { featureType: 'administrative.country', elementType: 'geometry.stroke', stylers: [{ color: '#4b6878' }] },
-    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
-    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4e6d70' }] },
-    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
-    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#255763' }] },
-    { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-    { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-];
 
 // Important Cyber Crime Helplines
 const HELPLINES = [
@@ -53,34 +20,33 @@ const HELPLINES = [
     { name: 'Police Emergency', number: '100', description: 'General emergency', color: 'from-orange-500 to-red-600' },
 ];
 
-export default function CyberCellLocator() {
-    const navigate = useNavigate();
+// ============ HAVERSINE DISTANCE ============
+function calculateDistance(from, to) {
+    const R = 6371;
+    const dLat = ((to.lat - from.lat) * Math.PI) / 180;
+    const dLng = ((to.lng - from.lng) * Math.PI) / 180;
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((from.lat * Math.PI) / 180) *
+        Math.cos((to.lat * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
 
+export default function CyberCellLocator() {
     // ============ STATE MANAGEMENT ============
     const [userLocation, setUserLocation] = useState(null);
     const [locationError, setLocationError] = useState(null);
     const [manualCity, setManualCity] = useState('');
     const [isSearching, setIsSearching] = useState(false);
     const [results, setResults] = useState([]);
-    const [selectedMarker, setSelectedMarker] = useState(null);
-    const [searchRadius, setSearchRadius] = useState(10000);
     const [hasSearched, setHasSearched] = useState(false);
     const [mapCenter, setMapCenter] = useState(defaultCenter);
+    const [mapZoom, setMapZoom] = useState(5);
     const [copiedNumber, setCopiedNumber] = useState(null);
     const [expandedResult, setExpandedResult] = useState(null);
-
-    // Refs
-    const mapRef = useRef(null);
-    const placesServiceRef = useRef(null);
-    const geocoderRef = useRef(null);
-    const searchCacheRef = useRef(new Map());
-
-    // ============ LOAD GOOGLE MAPS ============
-    const { isLoaded, loadError } = useJsApiLoader({
-        id: 'google-map-script',
-        googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
-        libraries,
-    });
 
     // ============ GEOLOCATION ON MOUNT ============
     useEffect(() => {
@@ -93,6 +59,7 @@ export default function CyberCellLocator() {
                     };
                     setUserLocation(loc);
                     setMapCenter(loc);
+                    setMapZoom(10);
                     setLocationError(null);
                 },
                 (error) => {
@@ -110,203 +77,68 @@ export default function CyberCellLocator() {
         }
     }, []);
 
-    // ============ MAP LOAD CALLBACK ============
-    const onMapLoad = useCallback((map) => {
-        mapRef.current = map;
-        placesServiceRef.current = new window.google.maps.places.PlacesService(map);
-        geocoderRef.current = new window.google.maps.Geocoder();
-    }, []);
-
-    // ============ CACHE KEY GENERATOR ============
-    const getCacheKey = useCallback((location, radius) => {
-        return `cyber_${location.lat.toFixed(4)}_${location.lng.toFixed(4)}_${radius}`;
-    }, []);
-
-    // ============ SEARCH PLACES ============
-    const searchPlaces = useCallback(async (location, keywords, radius) => {
-        if (!placesServiceRef.current) return [];
-
-        const allResults = [];
-        const seenPlaceIds = new Set();
-        const priorityKeywords = keywords.slice(0, 2);
-
-        for (const keyword of priorityKeywords) {
-            try {
-                const results = await new Promise((resolve, reject) => {
-                    placesServiceRef.current.nearbySearch(
-                        { location, radius, keyword, type: 'police' },
-                        (results, status) => {
-                            if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-                                resolve(results);
-                            } else if (status === window.google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-                                resolve([]);
-                            } else {
-                                reject(new Error(status));
-                            }
-                        }
-                    );
-                });
-
-                for (const place of results) {
-                    if (!seenPlaceIds.has(place.place_id)) {
-                        seenPlaceIds.add(place.place_id);
-                        allResults.push(place);
-                    }
-                }
-
-                if (allResults.length >= 5) break;
-            } catch (error) {
-                console.warn(`Search failed for "${keyword}":`, error);
-            }
-        }
-
-        return allResults;
-    }, []);
-
-    // ============ GET PLACE DETAILS ============
-    const getPlaceDetails = useCallback((placeId) => {
-        return new Promise((resolve) => {
-            if (!placesServiceRef.current) {
-                resolve(null);
-                return;
-            }
-
-            placesServiceRef.current.getDetails(
-                {
-                    placeId,
-                    fields: ['formatted_phone_number', 'formatted_address', 'opening_hours', 'website', 'international_phone_number'],
-                },
-                (place, status) => {
-                    if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-                        resolve(place);
-                    } else {
-                        resolve(null);
-                    }
-                }
-            );
-        });
-    }, []);
-
-    // ============ CALCULATE DISTANCE ============
-    const calculateDistance = useCallback((from, to) => {
-        const R = 6371;
-        const dLat = ((to.lat - from.lat) * Math.PI) / 180;
-        const dLng = ((to.lng - from.lng) * Math.PI) / 180;
-        const a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos((from.lat * Math.PI) / 180) *
-            Math.cos((to.lat * Math.PI) / 180) *
-            Math.sin(dLng / 2) *
-            Math.sin(dLng / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }, []);
-
-    // ============ MAIN SEARCH FUNCTION ============
-    const performSearch = useCallback(async (searchLocation) => {
-        if (!searchLocation || !placesServiceRef.current) return;
+    // ============ SEARCH CURATED STATIONS ============
+    const searchStations = useCallback((location) => {
+        if (!location) return;
 
         setIsSearching(true);
-        setResults([]);
         setHasSearched(true);
 
-        const cacheKey = getCacheKey(searchLocation, searchRadius);
+        // Calculate distance from user to each curated station
+        const stationsWithDistance = CYBER_STATIONS.map((station) => ({
+            ...station,
+            id: `station-${station.city}-${station.lat}`,
+            name: station.label,
+            distance: calculateDistance(location, { lat: station.lat, lng: station.lng }),
+        }));
 
-        if (searchCacheRef.current.has(cacheKey)) {
-            const cachedResults = searchCacheRef.current.get(cacheKey);
-            setResults(cachedResults);
-            setIsSearching(false);
-            return;
-        }
+        // Sort by distance, show top 8
+        stationsWithDistance.sort((a, b) => a.distance - b.distance);
+        const topResults = stationsWithDistance.slice(0, 8);
 
-        try {
-            let places = await searchPlaces(searchLocation, SEARCH_KEYWORDS, 10000);
+        setResults(topResults);
+        setIsSearching(false);
+    }, []);
 
-            if (places.length === 0) {
-                setSearchRadius(30000);
-                places = await searchPlaces(searchLocation, SEARCH_KEYWORDS, 30000);
-            }
-
-            const placesWithDistance = places.map((place) => ({
-                ...place,
-                distance: calculateDistance(searchLocation, {
-                    lat: place.geometry.location.lat(),
-                    lng: place.geometry.location.lng(),
-                }),
-                position: {
-                    lat: place.geometry.location.lat(),
-                    lng: place.geometry.location.lng(),
-                },
-            }));
-
-            placesWithDistance.sort((a, b) => a.distance - b.distance);
-            const topResults = placesWithDistance.slice(0, 5);
-
-            const resultsWithDetails = await Promise.all(
-                topResults.map(async (place) => {
-                    const details = await getPlaceDetails(place.place_id);
-                    return {
-                        ...place,
-                        phone: details?.formatted_phone_number || null,
-                        internationalPhone: details?.international_phone_number || null,
-                        address: details?.formatted_address || place.vicinity,
-                        website: details?.website || null,
-                        isOpen: details?.opening_hours?.isOpen?.() || null,
-                        openingHours: details?.opening_hours?.weekday_text || null,
-                    };
-                })
-            );
-
-            searchCacheRef.current.set(cacheKey, resultsWithDetails);
-            setResults(resultsWithDetails);
-        } catch (error) {
-            console.error('Search error:', error);
-        } finally {
-            setIsSearching(false);
-        }
-    }, [searchRadius, getCacheKey, searchPlaces, calculateDistance, getPlaceDetails]);
-
-    // ============ GEOCODE CITY ============
+    // ============ GEOCODE CITY VIA MAPTILER ============
     const geocodeCity = useCallback(async () => {
-        if (!manualCity.trim() || !geocoderRef.current) return;
+        if (!manualCity.trim()) return;
 
         setIsSearching(true);
 
         try {
-            const result = await new Promise((resolve, reject) => {
-                geocoderRef.current.geocode(
-                    { address: `${manualCity}, India` },
-                    (results, status) => {
-                        if (status === 'OK' && results[0]) {
-                            resolve(results[0]);
-                        } else {
-                            reject(new Error('City not found'));
-                        }
-                    }
-                );
-            });
+            const apiKey = import.meta.env.VITE_MAPTILER_API_KEY || '';
+            const query = encodeURIComponent(`${manualCity}, India`);
+            const url = `https://api.maptiler.com/geocoding/${query}.json?key=${apiKey}&limit=1&country=in`;
 
-            const location = {
-                lat: result.geometry.location.lat(),
-                lng: result.geometry.location.lng(),
-            };
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Geocoding request failed');
+
+            const data = await response.json();
+            if (!data.features || data.features.length === 0) {
+                throw new Error('City not found');
+            }
+
+            const [lng, lat] = data.features[0].geometry.coordinates;
+            const location = { lat, lng };
 
             setUserLocation(location);
             setMapCenter(location);
+            setMapZoom(10);
             setLocationError(null);
-            performSearch(location);
+            searchStations(location);
         } catch (error) {
             setLocationError('City not found. Please try another city name.');
             setIsSearching(false);
         }
-    }, [manualCity, performSearch]);
+    }, [manualCity, searchStations]);
 
-    // ============ TRIGGER SEARCH ============
+    // ============ TRIGGER SEARCH WHEN LOCATION AVAILABLE ============
     useEffect(() => {
-        if (userLocation && isLoaded && placesServiceRef.current && !hasSearched) {
-            performSearch(userLocation);
+        if (userLocation && !hasSearched) {
+            searchStations(userLocation);
         }
-    }, [userLocation, isLoaded, performSearch, hasSearched]);
+    }, [userLocation, hasSearched, searchStations]);
 
     // ============ COPY TO CLIPBOARD ============
     const copyToClipboard = useCallback((text, id) => {
@@ -322,64 +154,16 @@ export default function CyberCellLocator() {
         return `https://wa.me/${formattedPhone}?text=${encodeURIComponent('Hello, I need assistance regarding a cybercrime complaint.')}`;
     }, []);
 
-    // ============ MARKER ICONS ============
-    const userMarkerIcon = useMemo(() => {
-        if (!isLoaded) return null;
-        return {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 12,
-            fillColor: '#6366F1',
-            fillOpacity: 1,
-            strokeColor: '#4F46E5',
-            strokeWeight: 3,
-        };
-    }, [isLoaded]);
-
-    const placeMarkerIcon = useMemo(() => {
-        if (!isLoaded) return null;
-        return {
-            path: window.google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-            scale: 7,
-            fillColor: '#EF4444',
-            fillOpacity: 1,
-            strokeColor: '#DC2626',
-            strokeWeight: 2,
-        };
-    }, [isLoaded]);
-
-    // ============ LOADING/ERROR STATES ============
-    if (loadError) {
-        return (
-            <Background>
-                <div className="min-h-screen flex items-center justify-center p-4">
-                    <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-8 text-center max-w-md backdrop-blur-sm">
-                        <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-                        <h2 className="text-xl font-bold text-red-400 mb-2">Map Loading Failed</h2>
-                        <p className="text-gray-400">Please check your API key configuration and try again.</p>
-                        <Link to="/" className="mt-6 inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-medium transition-colors">
-                            <Home className="w-4 h-4" /> Back to Home
-                        </Link>
-                    </div>
-                </div>
-            </Background>
-        );
-    }
-
-    if (!isLoaded) {
-        return (
-            <Background>
-                <div className="min-h-screen flex items-center justify-center">
-                    <div className="text-center">
-                        <div className="relative">
-                            <div className="w-16 h-16 rounded-full border-4 border-indigo-500/30 border-t-indigo-500 animate-spin mx-auto" />
-                            <Shield className="w-6 h-6 text-indigo-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                        </div>
-                        <p className="text-gray-400 mt-6 text-lg">Loading Cyber Cell Locator...</p>
-                    </div>
-                </div>
-            </Background>
-        );
-    }
+    // ============ MAP MARKERS ============
+    const mapMarkers = results.map((place) => ({
+        id: place.id,
+        lat: place.lat,
+        lng: place.lng,
+        name: place.name,
+        address: place.address,
+        distance: place.distance,
+        color: '#EF4444',
+    }));
 
     return (
         <Background>
@@ -485,7 +269,7 @@ export default function CyberCellLocator() {
                                                 type="text"
                                                 value={manualCity}
                                                 onChange={(e) => setManualCity(e.target.value)}
-                                                onKeyPress={(e) => e.key === 'Enter' && geocodeCity()}
+                                                onKeyDown={(e) => e.key === 'Enter' && geocodeCity()}
                                                 placeholder="Enter your city (e.g., Mumbai, Bangalore)"
                                                 className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                                             />
@@ -512,49 +296,44 @@ export default function CyberCellLocator() {
                         </div>
                     )}
 
+                    {/* ============ SEARCH BAR (when location is available) ============ */}
+                    {!locationError && (
+                        <div className="mb-8">
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <div className="flex-1 relative">
+                                    <Search className="w-5 h-5 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                                    <input
+                                        type="text"
+                                        value={manualCity}
+                                        onChange={(e) => setManualCity(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && geocodeCity()}
+                                        placeholder="Search by city name (e.g., Mumbai, Pune, Hyderabad)"
+                                        className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                    />
+                                </div>
+                                <button
+                                    onClick={geocodeCity}
+                                    disabled={!manualCity.trim() || isSearching}
+                                    className="flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-indigo-500/25"
+                                >
+                                    {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
+                                    <span>Search</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* ============ MAP SECTION ============ */}
                         <div className="lg:col-span-2">
                             <div className="h-[450px] sm:h-[550px] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
-                                <GoogleMap
-                                    mapContainerStyle={containerStyle}
+                                <MapTilerMap
                                     center={mapCenter}
-                                    zoom={userLocation ? 13 : 5}
-                                    onLoad={onMapLoad}
-                                    options={{
-                                        styles: mapStyles,
-                                        disableDefaultUI: false,
-                                        zoomControl: true,
-                                        mapTypeControl: false,
-                                        streetViewControl: false,
-                                        fullscreenControl: true,
-                                    }}
-                                >
-                                    {userLocation && userMarkerIcon && (
-                                        <Marker position={userLocation} icon={userMarkerIcon} title="Your Location" zIndex={1000} />
-                                    )}
-
-                                    {results.map((place, index) => (
-                                        <Marker
-                                            key={place.place_id}
-                                            position={place.position}
-                                            icon={placeMarkerIcon}
-                                            label={{ text: String(index + 1), color: 'white', fontWeight: 'bold', fontSize: '12px' }}
-                                            onClick={() => setSelectedMarker(place)}
-                                            zIndex={100 - index}
-                                        />
-                                    ))}
-
-                                    {selectedMarker && (
-                                        <InfoWindow position={selectedMarker.position} onCloseClick={() => setSelectedMarker(null)}>
-                                            <div className="p-2 max-w-xs">
-                                                <h3 className="font-bold text-slate-900 mb-1">{selectedMarker.name}</h3>
-                                                <p className="text-sm text-gray-600 mb-2">{selectedMarker.address}</p>
-                                                <p className="text-sm font-medium text-red-600">{selectedMarker.distance.toFixed(1)} km away</p>
-                                            </div>
-                                        </InfoWindow>
-                                    )}
-                                </GoogleMap>
+                                    zoom={mapZoom}
+                                    markers={mapMarkers}
+                                    userLocation={userLocation}
+                                    onMarkerClick={(marker) => setExpandedResult(marker.id)}
+                                />
                             </div>
                         </div>
 
@@ -572,7 +351,7 @@ export default function CyberCellLocator() {
                                     {isSearching
                                         ? 'Searching nearby stations...'
                                         : results.length > 0
-                                            ? `Found ${results.length} stations within ${searchRadius / 1000}km`
+                                            ? `Found ${results.length} stations nearest to you`
                                             : hasSearched
                                                 ? 'No results found nearby'
                                                 : 'Waiting for your location...'}
@@ -592,15 +371,15 @@ export default function CyberCellLocator() {
                                 <div className="space-y-4 max-h-[400px] overflow-y-auto custom-scrollbar pr-2">
                                     {results.map((place, index) => (
                                         <div
-                                            key={place.place_id}
-                                            className={`bg-slate-900/50 border rounded-2xl overflow-hidden transition-all duration-300 ${expandedResult === place.place_id
+                                            key={place.id}
+                                            className={`bg-slate-900/50 border rounded-2xl overflow-hidden transition-all duration-300 ${expandedResult === place.id
                                                 ? 'border-indigo-500/50 shadow-lg shadow-indigo-500/10'
                                                 : 'border-slate-800 hover:border-slate-700'
                                                 }`}
                                         >
                                             <div
                                                 className="p-4 cursor-pointer"
-                                                onClick={() => setExpandedResult(expandedResult === place.place_id ? null : place.place_id)}
+                                                onClick={() => setExpandedResult(expandedResult === place.id ? null : place.id)}
                                             >
                                                 <div className="flex items-start gap-4">
                                                     <div className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-bold text-sm flex-shrink-0 bg-gradient-to-br from-red-500 to-rose-600 shadow-lg">
@@ -613,24 +392,21 @@ export default function CyberCellLocator() {
                                                             <span className="text-sm font-medium text-indigo-400">
                                                                 📍 {place.distance.toFixed(1)} km
                                                             </span>
-                                                            {place.isOpen !== null && (
-                                                                <span className={`text-sm flex items-center gap-1.5 ${place.isOpen ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                                                    <Clock className="w-3.5 h-3.5" />
-                                                                    {place.isOpen ? 'Open Now' : 'Closed'}
-                                                                </span>
-                                                            )}
+                                                            <span className="text-xs text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded-full">
+                                                                {place.city}
+                                                            </span>
                                                         </div>
                                                     </div>
-                                                    <ChevronRight className={`w-5 h-5 text-slate-500 transition-transform ${expandedResult === place.place_id ? 'rotate-90' : ''}`} />
+                                                    <ChevronRight className={`w-5 h-5 text-slate-500 transition-transform ${expandedResult === place.id ? 'rotate-90' : ''}`} />
                                                 </div>
                                             </div>
 
                                             {/* Expanded Content */}
-                                            {expandedResult === place.place_id && (
+                                            {expandedResult === place.id && (
                                                 <div className="px-4 pb-4 pt-2 border-t border-slate-800 space-y-3">
                                                     <div className="grid grid-cols-2 gap-3">
                                                         <a
-                                                            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(place.name)}&destination_place_id=${place.place_id}`}
+                                                            href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="flex items-center justify-center gap-2 px-4 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl font-medium text-sm transition-all shadow-lg shadow-indigo-500/20"
@@ -667,17 +443,15 @@ export default function CyberCellLocator() {
                                                                 WhatsApp
                                                             </a>
 
-                                                            {place.website && (
-                                                                <a
-                                                                    href={place.website}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-medium text-sm transition-all"
-                                                                >
-                                                                    <ExternalLink className="w-4 h-4" />
-                                                                    Website
-                                                                </a>
-                                                            )}
+                                                            <a
+                                                                href={place.url}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-medium text-sm transition-all"
+                                                            >
+                                                                <ExternalLink className="w-4 h-4" />
+                                                                Google Maps
+                                                            </a>
                                                         </div>
                                                     )}
 
@@ -687,11 +461,11 @@ export default function CyberCellLocator() {
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    copyToClipboard(place.phone, place.place_id);
+                                                                    copyToClipboard(place.phone, place.id);
                                                                 }}
                                                                 className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
                                                             >
-                                                                {copiedNumber === place.place_id ? (
+                                                                {copiedNumber === place.id ? (
                                                                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                                                                 ) : (
                                                                     <Copy className="w-4 h-4 text-slate-400" />
@@ -804,34 +578,9 @@ export default function CyberCellLocator() {
                                 </a>
                             ))}
                         </div>
-
-                        {/* Info Note */}
-                        <div className="mt-6 bg-slate-900/30 border border-slate-800 rounded-xl p-4 flex items-start gap-3">
-                            <Shield className="w-5 h-5 text-slate-500 flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-slate-400">
-                                <strong className="text-slate-300">Tip:</strong> Click on any city card to open Google Maps with directions to the nearest Cyber Crime Police Station in that city.
-                            </p>
-                        </div>
                     </div>
                 </main>
-
-                {/* Footer */}
-                <footer className="border-t border-slate-800/60 py-8 mt-12">
-                    <div className="max-w-7xl mx-auto px-6 text-center">
-                        <p className="text-[11px] text-slate-500 uppercase tracking-widest">
-                            Part of LegalCore AI • Verified Legal Intelligence
-                        </p>
-                    </div>
-                </footer>
             </div>
-
-            {/* Custom Scrollbar Styles */}
-            <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #6366f1; }
-      `}</style>
         </Background>
     );
 }

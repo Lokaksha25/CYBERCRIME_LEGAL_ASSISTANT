@@ -1,6 +1,5 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { GoogleMap, useJsApiLoader, Marker, InfoWindow } from '@react-google-maps/api';
-import { useNavigate, Link } from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import {
     Phone, Navigation, Scale, Search, AlertTriangle,
     Loader2, X, MessageCircle, ArrowLeft, Clock, Star,
@@ -8,42 +7,11 @@ import {
     Shield, ChevronRight, Gavel, Home, MapPin
 } from 'lucide-react';
 import Background from '../components/Background';
-
-// Map container styles
-const containerStyle = {
-    width: '100%',
-    height: '100%',
-    borderRadius: '1rem',
-};
+import MapTilerMap from '../components/MapTilerMap';
+import { LAWYER_DATA, SPECIALIZATIONS } from '../data/lawyerData';
 
 // Default center (India - New Delhi)
 const defaultCenter = { lat: 28.6139, lng: 77.209 };
-
-// Libraries to load
-const libraries = ['places'];
-
-// Search keywords for Lawyers
-const SEARCH_KEYWORDS = [
-    'Cyber Crime Lawyer',
-    'Advocate High Court',
-    'Criminal Lawyer',
-    'IT Act Lawyer',
-    'Lawyer'
-];
-
-// Custom map styles for dark theme
-const mapStyles = [
-    { elementType: 'geometry', stylers: [{ color: '#1d2c4d' }] },
-    { elementType: 'labels.text.fill', stylers: [{ color: '#8ec3b9' }] },
-    { elementType: 'labels.text.stroke', stylers: [{ color: '#1a3646' }] },
-    { featureType: 'administrative.country', elementType: 'geometry.stroke', stylers: [{ color: '#4b6878' }] },
-    { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#0e1626' }] },
-    { featureType: 'water', elementType: 'labels.text.fill', stylers: [{ color: '#4e6d70' }] },
-    { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#304a7d' }] },
-    { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#255763' }] },
-    { featureType: 'poi', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-    { featureType: 'transit', elementType: 'labels', stylers: [{ visibility: 'off' }] },
-];
 
 // Legal Aid Resources
 const LEGAL_RESOURCES = [
@@ -61,45 +29,34 @@ const LEGAL_RESOURCES = [
     },
 ];
 
-// Specializations to look for
-const SPECIALIZATIONS = [
-    { name: 'Cyber Crime', color: 'from-violet-500 to-purple-600' },
-    { name: 'IT Act', color: 'from-blue-500 to-indigo-600' },
-    { name: 'Data Privacy', color: 'from-emerald-500 to-teal-600' },
-    { name: 'Online Fraud', color: 'from-orange-500 to-red-600' },
-    { name: 'Digital Evidence', color: 'from-cyan-500 to-blue-600' },
-    { name: 'E-commerce', color: 'from-pink-500 to-rose-600' }
-];
+// ============ HAVERSINE DISTANCE ============
+function calculateDistance(from, to) {
+    const R = 6371;
+    const dLat = ((to.lat - from.lat) * Math.PI) / 180;
+    const dLng = ((to.lng - from.lng) * Math.PI) / 180;
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((from.lat * Math.PI) / 180) *
+        Math.cos((to.lat * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+}
 
 export default function LegalHelpLocator() {
-    const navigate = useNavigate();
-
     // ============ STATE MANAGEMENT ============
     const [userLocation, setUserLocation] = useState(null);
     const [locationError, setLocationError] = useState(null);
     const [manualCity, setManualCity] = useState('');
     const [isSearching, setIsSearching] = useState(false);
     const [results, setResults] = useState([]);
-    const [selectedMarker, setSelectedMarker] = useState(null);
-    const [searchRadius, setSearchRadius] = useState(10000);
     const [hasSearched, setHasSearched] = useState(false);
     const [mapCenter, setMapCenter] = useState(defaultCenter);
+    const [mapZoom, setMapZoom] = useState(5);
     const [copiedNumber, setCopiedNumber] = useState(null);
     const [expandedResult, setExpandedResult] = useState(null);
     const [selectedSpecialization, setSelectedSpecialization] = useState(null);
-
-    // Refs
-    const mapRef = useRef(null);
-    const placesServiceRef = useRef(null);
-    const geocoderRef = useRef(null);
-    const searchCacheRef = useRef(new Map());
-
-    // ============ LOAD GOOGLE MAPS ============
-    const { isLoaded, loadError } = useJsApiLoader({
-        id: 'google-map-script',
-        googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY || '',
-        libraries,
-    });
 
     // ============ GEOLOCATION ON MOUNT ============
     useEffect(() => {
@@ -112,6 +69,7 @@ export default function LegalHelpLocator() {
                     };
                     setUserLocation(loc);
                     setMapCenter(loc);
+                    setMapZoom(10);
                     setLocationError(null);
                 },
                 (error) => {
@@ -129,227 +87,83 @@ export default function LegalHelpLocator() {
         }
     }, []);
 
-    // ============ MAP LOAD CALLBACK ============
-    const onMapLoad = useCallback((map) => {
-        mapRef.current = map;
-        placesServiceRef.current = new window.google.maps.places.PlacesService(map);
-        geocoderRef.current = new window.google.maps.Geocoder();
-    }, []);
-
-    // ============ CACHE KEY GENERATOR ============
-    const getCacheKey = useCallback((location, radius, specialization) => {
-        return `lawyer_${location.lat.toFixed(4)}_${location.lng.toFixed(4)}_${radius}_${specialization || 'all'}`;
-    }, []);
-
-    // ============ SEARCH PLACES ============
-    const searchPlaces = useCallback(async (location, keywords, radius) => {
-        if (!placesServiceRef.current) return [];
-
-        const allResults = [];
-        const seenPlaceIds = new Set();
-        const priorityKeywords = keywords.slice(0, 2);
-
-        for (const keyword of priorityKeywords) {
-            try {
-                const results = await new Promise((resolve, reject) => {
-                    placesServiceRef.current.nearbySearch(
-                        { location, radius, keyword, type: 'lawyer' },
-                        (results, status) => {
-                            if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-                                resolve(results);
-                            } else if (status === window.google.maps.places.PlacesServiceStatus.ZERO_RESULTS) {
-                                resolve([]);
-                            } else {
-                                reject(new Error(status));
-                            }
-                        }
-                    );
-                });
-
-                for (const place of results) {
-                    if (!seenPlaceIds.has(place.place_id)) {
-                        seenPlaceIds.add(place.place_id);
-                        allResults.push(place);
-                    }
-                }
-
-                if (allResults.length >= 6) break;
-            } catch (error) {
-                console.warn(`Search failed for "${keyword}":`, error);
-            }
-        }
-
-        return allResults;
-    }, []);
-
-    // ============ GET PLACE DETAILS ============
-    const getPlaceDetails = useCallback((placeId) => {
-        return new Promise((resolve) => {
-            if (!placesServiceRef.current) {
-                resolve(null);
-                return;
-            }
-
-            placesServiceRef.current.getDetails(
-                {
-                    placeId,
-                    fields: ['formatted_phone_number', 'formatted_address', 'opening_hours', 'website', 'international_phone_number', 'reviews'],
-                },
-                (place, status) => {
-                    if (status === window.google.maps.places.PlacesServiceStatus.OK) {
-                        resolve(place);
-                    } else {
-                        resolve(null);
-                    }
-                }
-            );
-        });
-    }, []);
-
-    // ============ CALCULATE DISTANCE ============
-    const calculateDistance = useCallback((from, to) => {
-        const R = 6371;
-        const dLat = ((to.lat - from.lat) * Math.PI) / 180;
-        const dLng = ((to.lng - from.lng) * Math.PI) / 180;
-        const a =
-            Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-            Math.cos((from.lat * Math.PI) / 180) *
-            Math.cos((to.lat * Math.PI) / 180) *
-            Math.sin(dLng / 2) *
-            Math.sin(dLng / 2);
-        const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-        return R * c;
-    }, []);
-
-    // ============ MAIN SEARCH FUNCTION ============
-    const performSearch = useCallback(async (searchLocation, specialization = null) => {
-        if (!searchLocation || !placesServiceRef.current) return;
+    // ============ SEARCH CURATED LAWYERS ============
+    const searchLawyers = useCallback((location, specialization = null) => {
+        if (!location) return;
 
         setIsSearching(true);
-        setResults([]);
         setHasSearched(true);
 
-        const keywords = specialization
-            ? [`${specialization} Lawyer`, ...SEARCH_KEYWORDS]
-            : SEARCH_KEYWORDS;
-
-        const cacheKey = getCacheKey(searchLocation, searchRadius, specialization);
-
-        if (searchCacheRef.current.has(cacheKey)) {
-            const cachedResults = searchCacheRef.current.get(cacheKey);
-            setResults(cachedResults);
-            setIsSearching(false);
-            return;
-        }
-
-        try {
-            let places = await searchPlaces(searchLocation, keywords, 10000);
-
-            if (places.length === 0) {
-                setSearchRadius(30000);
-                places = await searchPlaces(searchLocation, keywords, 30000);
-            }
-
-            const placesWithDistance = places.map((place) => ({
-                ...place,
-                distance: calculateDistance(searchLocation, {
-                    lat: place.geometry.location.lat(),
-                    lng: place.geometry.location.lng(),
-                }),
-                position: {
-                    lat: place.geometry.location.lat(),
-                    lng: place.geometry.location.lng(),
-                },
-            }));
-
-            placesWithDistance.sort((a, b) => a.distance - b.distance);
-            const topResults = placesWithDistance.slice(0, 6);
-
-            const resultsWithDetails = await Promise.all(
-                topResults.slice(0, 4).map(async (place) => {
-                    const details = await getPlaceDetails(place.place_id);
-                    return {
-                        ...place,
-                        phone: details?.formatted_phone_number || null,
-                        internationalPhone: details?.international_phone_number || null,
-                        address: details?.formatted_address || place.vicinity,
-                        website: details?.website || null,
-                        isOpen: details?.opening_hours?.isOpen?.() || null,
-                        openingHours: details?.opening_hours?.weekday_text || null,
-                        reviews: details?.reviews?.slice(0, 2) || [],
-                    };
-                })
+        // Filter by specialization if selected
+        let filteredLawyers = LAWYER_DATA;
+        if (specialization) {
+            filteredLawyers = LAWYER_DATA.filter(lawyer =>
+                lawyer.specializations.includes(specialization)
             );
-
-            const remainingResults = topResults.slice(4).map((place) => ({
-                ...place,
-                phone: null,
-                address: place.vicinity,
-                website: null,
-                reviews: [],
-            }));
-
-            const finalResults = [...resultsWithDetails, ...remainingResults];
-            searchCacheRef.current.set(cacheKey, finalResults);
-            setResults(finalResults);
-        } catch (error) {
-            console.error('Search error:', error);
-        } finally {
-            setIsSearching(false);
         }
-    }, [searchRadius, getCacheKey, searchPlaces, calculateDistance, getPlaceDetails]);
 
-    // ============ GEOCODE CITY ============
+        // Calculate distance from user to each lawyer
+        const lawyersWithDistance = filteredLawyers.map((lawyer) => ({
+            ...lawyer,
+            distance: calculateDistance(location, { lat: lawyer.lat, lng: lawyer.lng }),
+        }));
+
+        // Sort by distance, show top 8
+        lawyersWithDistance.sort((a, b) => a.distance - b.distance);
+        const topResults = lawyersWithDistance.slice(0, 8);
+
+        setResults(topResults);
+        setIsSearching(false);
+    }, []);
+
+    // ============ GEOCODE CITY VIA MAPTILER ============
     const geocodeCity = useCallback(async () => {
-        if (!manualCity.trim() || !geocoderRef.current) return;
+        if (!manualCity.trim()) return;
 
         setIsSearching(true);
 
         try {
-            const result = await new Promise((resolve, reject) => {
-                geocoderRef.current.geocode(
-                    { address: `${manualCity}, India` },
-                    (results, status) => {
-                        if (status === 'OK' && results[0]) {
-                            resolve(results[0]);
-                        } else {
-                            reject(new Error('City not found'));
-                        }
-                    }
-                );
-            });
+            const apiKey = import.meta.env.VITE_MAPTILER_API_KEY || '';
+            const query = encodeURIComponent(`${manualCity}, India`);
+            const url = `https://api.maptiler.com/geocoding/${query}.json?key=${apiKey}&limit=1&country=in`;
 
-            const location = {
-                lat: result.geometry.location.lat(),
-                lng: result.geometry.location.lng(),
-            };
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Geocoding request failed');
+
+            const data = await response.json();
+            if (!data.features || data.features.length === 0) {
+                throw new Error('City not found');
+            }
+
+            const [lng, lat] = data.features[0].geometry.coordinates;
+            const location = { lat, lng };
 
             setUserLocation(location);
             setMapCenter(location);
+            setMapZoom(10);
             setLocationError(null);
-            performSearch(location, selectedSpecialization);
+            searchLawyers(location, selectedSpecialization);
         } catch (error) {
             setLocationError('City not found. Please try another city name.');
             setIsSearching(false);
         }
-    }, [manualCity, performSearch, selectedSpecialization]);
+    }, [manualCity, searchLawyers, selectedSpecialization]);
 
-    // ============ TRIGGER SEARCH ============
+    // ============ TRIGGER SEARCH WHEN LOCATION AVAILABLE ============
     useEffect(() => {
-        if (userLocation && isLoaded && placesServiceRef.current && !hasSearched) {
-            performSearch(userLocation, selectedSpecialization);
+        if (userLocation && !hasSearched) {
+            searchLawyers(userLocation, selectedSpecialization);
         }
-    }, [userLocation, isLoaded, performSearch, hasSearched, selectedSpecialization]);
+    }, [userLocation, hasSearched, searchLawyers, selectedSpecialization]);
 
     // ============ HANDLE SPECIALIZATION CHANGE ============
     const handleSpecializationChange = useCallback((spec) => {
         const newSpec = spec === selectedSpecialization ? null : spec;
         setSelectedSpecialization(newSpec);
         if (userLocation) {
-            setHasSearched(false);
-            performSearch(userLocation, newSpec);
+            searchLawyers(userLocation, newSpec);
         }
-    }, [selectedSpecialization, userLocation, performSearch]);
+    }, [selectedSpecialization, userLocation, searchLawyers]);
 
     // ============ COPY TO CLIPBOARD ============
     const copyToClipboard = useCallback((text, id) => {
@@ -365,64 +179,16 @@ export default function LegalHelpLocator() {
         return `https://wa.me/${formattedPhone}?text=${encodeURIComponent('Hello, I need legal consultation regarding a cybercrime matter. Can we schedule a meeting?')}`;
     }, []);
 
-    // ============ MARKER ICONS ============
-    const userMarkerIcon = useMemo(() => {
-        if (!isLoaded) return null;
-        return {
-            path: window.google.maps.SymbolPath.CIRCLE,
-            scale: 12,
-            fillColor: '#6366F1',
-            fillOpacity: 1,
-            strokeColor: '#4F46E5',
-            strokeWeight: 3,
-        };
-    }, [isLoaded]);
-
-    const placeMarkerIcon = useMemo(() => {
-        if (!isLoaded) return null;
-        return {
-            path: window.google.maps.SymbolPath.BACKWARD_CLOSED_ARROW,
-            scale: 7,
-            fillColor: '#8B5CF6',
-            fillOpacity: 1,
-            strokeColor: '#7C3AED',
-            strokeWeight: 2,
-        };
-    }, [isLoaded]);
-
-    // ============ LOADING/ERROR STATES ============
-    if (loadError) {
-        return (
-            <Background>
-                <div className="min-h-screen flex items-center justify-center p-4">
-                    <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-8 text-center max-w-md backdrop-blur-sm">
-                        <AlertTriangle className="w-16 h-16 text-red-400 mx-auto mb-4" />
-                        <h2 className="text-xl font-bold text-red-400 mb-2">Map Loading Failed</h2>
-                        <p className="text-gray-400">Please check your API key configuration and try again.</p>
-                        <Link to="/" className="mt-6 inline-flex items-center gap-2 px-6 py-3 bg-indigo-600 hover:bg-indigo-500 rounded-xl text-white font-medium transition-colors">
-                            <Home className="w-4 h-4" /> Back to Home
-                        </Link>
-                    </div>
-                </div>
-            </Background>
-        );
-    }
-
-    if (!isLoaded) {
-        return (
-            <Background>
-                <div className="min-h-screen flex items-center justify-center">
-                    <div className="text-center">
-                        <div className="relative">
-                            <div className="w-16 h-16 rounded-full border-4 border-violet-500/30 border-t-violet-500 animate-spin mx-auto" />
-                            <Scale className="w-6 h-6 text-violet-400 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
-                        </div>
-                        <p className="text-gray-400 mt-6 text-lg">Loading Legal Help Finder...</p>
-                    </div>
-                </div>
-            </Background>
-        );
-    }
+    // ============ MAP MARKERS ============
+    const mapMarkers = results.map((lawyer) => ({
+        id: lawyer.id,
+        lat: lawyer.lat,
+        lng: lawyer.lng,
+        name: lawyer.name,
+        address: lawyer.address,
+        distance: lawyer.distance,
+        color: '#8B5CF6',
+    }));
 
     return (
         <Background>
@@ -507,7 +273,7 @@ export default function LegalHelpLocator() {
                                                 type="text"
                                                 value={manualCity}
                                                 onChange={(e) => setManualCity(e.target.value)}
-                                                onKeyPress={(e) => e.key === 'Enter' && geocodeCity()}
+                                                onKeyDown={(e) => e.key === 'Enter' && geocodeCity()}
                                                 placeholder="Enter your city (e.g., Mumbai, Bangalore)"
                                                 className="w-full px-4 py-3 bg-slate-900 border border-slate-700 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                                             />
@@ -534,57 +300,44 @@ export default function LegalHelpLocator() {
                         </div>
                     )}
 
+                    {/* ============ SEARCH BAR (when location is available) ============ */}
+                    {!locationError && (
+                        <div className="mb-8">
+                            <div className="flex flex-col sm:flex-row gap-3">
+                                <div className="flex-1 relative">
+                                    <Search className="w-5 h-5 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" />
+                                    <input
+                                        type="text"
+                                        value={manualCity}
+                                        onChange={(e) => setManualCity(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && geocodeCity()}
+                                        placeholder="Search by city name (e.g., Mumbai, Pune, Hyderabad)"
+                                        className="w-full pl-12 pr-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
+                                    />
+                                </div>
+                                <button
+                                    onClick={geocodeCity}
+                                    disabled={!manualCity.trim() || isSearching}
+                                    className="flex items-center justify-center gap-2 px-6 py-3 bg-violet-600 hover:bg-violet-500 rounded-xl font-medium transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-violet-500/25"
+                                >
+                                    {isSearching ? <Loader2 className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
+                                    <span>Search</span>
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                         {/* ============ MAP SECTION ============ */}
                         <div className="lg:col-span-2">
                             <div className="h-[450px] sm:h-[550px] rounded-2xl overflow-hidden border border-slate-800 shadow-2xl">
-                                <GoogleMap
-                                    mapContainerStyle={containerStyle}
+                                <MapTilerMap
                                     center={mapCenter}
-                                    zoom={userLocation ? 13 : 5}
-                                    onLoad={onMapLoad}
-                                    options={{
-                                        styles: mapStyles,
-                                        disableDefaultUI: false,
-                                        zoomControl: true,
-                                        mapTypeControl: false,
-                                        streetViewControl: false,
-                                        fullscreenControl: true,
-                                    }}
-                                >
-                                    {userLocation && userMarkerIcon && (
-                                        <Marker position={userLocation} icon={userMarkerIcon} title="Your Location" zIndex={1000} />
-                                    )}
-
-                                    {results.map((place, index) => (
-                                        <Marker
-                                            key={place.place_id}
-                                            position={place.position}
-                                            icon={placeMarkerIcon}
-                                            label={{ text: String(index + 1), color: 'white', fontWeight: 'bold', fontSize: '12px' }}
-                                            onClick={() => setSelectedMarker(place)}
-                                            zIndex={100 - index}
-                                        />
-                                    ))}
-
-                                    {selectedMarker && (
-                                        <InfoWindow position={selectedMarker.position} onCloseClick={() => setSelectedMarker(null)}>
-                                            <div className="p-2 max-w-xs">
-                                                <h3 className="font-bold text-slate-900 mb-1">{selectedMarker.name}</h3>
-                                                <p className="text-sm text-gray-600 mb-2">{selectedMarker.address}</p>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm font-medium text-violet-600">{selectedMarker.distance.toFixed(1)} km away</span>
-                                                    {selectedMarker.rating && (
-                                                        <span className="text-sm text-amber-600 flex items-center gap-1">
-                                                            <Star className="w-3.5 h-3.5 fill-current" />
-                                                            {selectedMarker.rating}
-                                                        </span>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </InfoWindow>
-                                    )}
-                                </GoogleMap>
+                                    zoom={mapZoom}
+                                    markers={mapMarkers}
+                                    userLocation={userLocation}
+                                    onMarkerClick={(marker) => setExpandedResult(marker.id)}
+                                />
                             </div>
                         </div>
 
@@ -602,7 +355,7 @@ export default function LegalHelpLocator() {
                                     {isSearching
                                         ? 'Searching for advocates...'
                                         : results.length > 0
-                                            ? `Found ${results.length} advocates within ${searchRadius / 1000}km`
+                                            ? `Found ${results.length} advocates nearest to you${selectedSpecialization ? ` (${selectedSpecialization})` : ''}`
                                             : hasSearched
                                                 ? 'No results found nearby'
                                                 : 'Waiting for your location...'}
@@ -620,17 +373,17 @@ export default function LegalHelpLocator() {
                             {/* Results List */}
                             {!isSearching && results.length > 0 && (
                                 <div className="space-y-4 max-h-[350px] overflow-y-auto custom-scrollbar pr-2">
-                                    {results.slice(0, 4).map((place, index) => (
+                                    {results.map((place, index) => (
                                         <div
-                                            key={place.place_id}
-                                            className={`bg-slate-900/50 border rounded-2xl overflow-hidden transition-all duration-300 ${expandedResult === place.place_id
+                                            key={place.id}
+                                            className={`bg-slate-900/50 border rounded-2xl overflow-hidden transition-all duration-300 ${expandedResult === place.id
                                                 ? 'border-violet-500/50 shadow-lg shadow-violet-500/10'
                                                 : 'border-slate-800 hover:border-slate-700'
                                                 }`}
                                         >
                                             <div
                                                 className="p-4 cursor-pointer"
-                                                onClick={() => setExpandedResult(expandedResult === place.place_id ? null : place.place_id)}
+                                                onClick={() => setExpandedResult(expandedResult === place.id ? null : place.id)}
                                             >
                                                 <div className="flex items-start gap-4">
                                                     <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-violet-500 to-purple-600 shadow-lg">
@@ -649,24 +402,31 @@ export default function LegalHelpLocator() {
                                                                     {place.rating}
                                                                 </span>
                                                             )}
-                                                            {place.isOpen !== null && (
-                                                                <span className={`text-sm flex items-center gap-1.5 ${place.isOpen ? 'text-emerald-400' : 'text-amber-400'}`}>
-                                                                    <Clock className="w-3.5 h-3.5" />
-                                                                    {place.isOpen ? 'Open' : 'Closed'}
-                                                                </span>
-                                                            )}
+                                                            <span className="text-xs text-slate-500 bg-slate-800/50 px-2 py-0.5 rounded-full">
+                                                                {place.city}
+                                                            </span>
                                                         </div>
+                                                        {/* Specialization tags */}
+                                                        {place.specializations && place.specializations.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1.5 mt-2">
+                                                                {place.specializations.slice(0, 3).map(spec => (
+                                                                    <span key={spec} className="text-[10px] bg-violet-500/10 text-violet-300 px-2 py-0.5 rounded-full border border-violet-500/20">
+                                                                        {spec}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        )}
                                                     </div>
-                                                    <ChevronRight className={`w-5 h-5 text-slate-500 transition-transform ${expandedResult === place.place_id ? 'rotate-90' : ''}`} />
+                                                    <ChevronRight className={`w-5 h-5 text-slate-500 transition-transform ${expandedResult === place.id ? 'rotate-90' : ''}`} />
                                                 </div>
                                             </div>
 
                                             {/* Expanded Content */}
-                                            {expandedResult === place.place_id && (
+                                            {expandedResult === place.id && (
                                                 <div className="px-4 pb-4 pt-2 border-t border-slate-800 space-y-3">
                                                     <div className="grid grid-cols-2 gap-3">
                                                         <a
-                                                            href={`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(place.name)}&destination_place_id=${place.place_id}`}
+                                                            href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`}
                                                             target="_blank"
                                                             rel="noopener noreferrer"
                                                             className="flex items-center justify-center gap-2 px-4 py-3 bg-violet-600 hover:bg-violet-500 rounded-xl font-medium text-sm transition-all shadow-lg shadow-violet-500/20"
@@ -702,18 +462,15 @@ export default function LegalHelpLocator() {
                                                                 <MessageCircle className="w-4 h-4" />
                                                                 WhatsApp
                                                             </a>
-
-                                                            {place.website && (
-                                                                <a
-                                                                    href={place.website}
-                                                                    target="_blank"
-                                                                    rel="noopener noreferrer"
-                                                                    className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-medium text-sm transition-all"
-                                                                >
-                                                                    <ExternalLink className="w-4 h-4" />
-                                                                    Website
-                                                                </a>
-                                                            )}
+                                                            <a
+                                                                href={`https://www.google.com/maps/search/${encodeURIComponent(place.name + ' ' + place.city)}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                                className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-700 hover:bg-slate-600 rounded-xl font-medium text-sm transition-all"
+                                                            >
+                                                                <ExternalLink className="w-4 h-4" />
+                                                                Google Maps
+                                                            </a>
                                                         </div>
                                                     )}
 
@@ -723,39 +480,16 @@ export default function LegalHelpLocator() {
                                                             <button
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
-                                                                    copyToClipboard(place.phone, place.place_id);
+                                                                    copyToClipboard(place.phone, place.id);
                                                                 }}
                                                                 className="p-2 hover:bg-slate-700 rounded-lg transition-colors"
                                                             >
-                                                                {copiedNumber === place.place_id ? (
+                                                                {copiedNumber === place.id ? (
                                                                     <CheckCircle2 className="w-4 h-4 text-emerald-400" />
                                                                 ) : (
                                                                     <Copy className="w-4 h-4 text-slate-400" />
                                                                 )}
                                                             </button>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Reviews */}
-                                                    {place.reviews && place.reviews.length > 0 && (
-                                                        <div className="space-y-2">
-                                                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500">Recent Reviews</h4>
-                                                            {place.reviews.map((review, idx) => (
-                                                                <div key={idx} className="bg-slate-800/30 rounded-xl p-3">
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <div className="flex">
-                                                                            {[...Array(5)].map((_, i) => (
-                                                                                <Star
-                                                                                    key={i}
-                                                                                    className={`w-3 h-3 ${i < review.rating ? 'text-amber-400 fill-current' : 'text-slate-600'}`}
-                                                                                />
-                                                                            ))}
-                                                                        </div>
-                                                                        <span className="text-xs text-slate-500">{review.relative_time_description}</span>
-                                                                    </div>
-                                                                    <p className="text-xs text-slate-400 line-clamp-2">{review.text}</p>
-                                                                </div>
-                                                            ))}
                                                         </div>
                                                     )}
                                                 </div>
@@ -808,45 +542,19 @@ export default function LegalHelpLocator() {
                             </div>
 
                             {/* ============ DISCLAIMER ============ */}
-                            <div className="bg-slate-900/30 border border-slate-800/50 rounded-xl p-4">
-                                <p className="text-xs text-slate-500 text-center leading-relaxed">
-                                    ⚖️ Listings are based on public map data. Please verify credentials independently before engaging any legal services. This is not legal advice.
-                                </p>
-                            </div>
-
-                            {/* Quick Link to Cyber Cell */}
                             <div className="bg-slate-900/50 border border-slate-800 rounded-2xl p-5">
-                                <h4 className="text-sm font-bold uppercase tracking-wider text-slate-500 mb-4">Need Police Assistance?</h4>
-                                <Link
-                                    to="/cyber-cell"
-                                    className="flex items-center justify-center gap-3 p-4 bg-gradient-to-r from-red-500/20 to-rose-500/20 hover:from-red-500/30 hover:to-rose-500/30 border border-red-500/30 rounded-xl transition-all group"
-                                >
-                                    <Shield className="w-5 h-5 text-red-400" />
-                                    <span className="font-medium text-red-300">Find Nearest Cyber Cell</span>
-                                    <ChevronRight className="w-4 h-4 text-red-400 group-hover:translate-x-1 transition-transform" />
-                                </Link>
+                                <div className="flex items-start gap-3">
+                                    <Shield className="w-5 h-5 text-slate-500 mt-0.5 flex-shrink-0" />
+                                    <p className="text-xs text-slate-500 leading-relaxed">
+                                        <strong className="text-slate-400">Disclaimer:</strong> This directory is for informational purposes only.
+                                        Always verify credentials through the Bar Council of India. This does not constitute a legal referral.
+                                    </p>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </main>
-
-                {/* Footer */}
-                <footer className="border-t border-slate-800/60 py-8 mt-12">
-                    <div className="max-w-7xl mx-auto px-6 text-center">
-                        <p className="text-[11px] text-slate-500 uppercase tracking-widest">
-                            Part of LegalCore AI • Verified Legal Intelligence
-                        </p>
-                    </div>
-                </footer>
             </div>
-
-            {/* Custom Scrollbar Styles */}
-            <style jsx global>{`
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #8b5cf6; }
-      `}</style>
         </Background>
     );
 }
